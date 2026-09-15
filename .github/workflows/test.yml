@@ -1,11 +1,18 @@
-name: Test
+name: PacketScope CI
 
 on:
   push:
+    branches: ["main"]
   pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  checks: write
 
 jobs:
   test:
+    name: Test & Build
     runs-on: ubuntu-latest
 
     steps:
@@ -17,5 +24,37 @@ jobs:
         with:
           version: 0.16.0
 
+      - name: Check formatting
+        run: zig fmt --check src
+
       - name: Run tests
         run: zig build test
+
+      - name: Build PacketScope
+        run: zig build
+
+  test-report:
+    name: Test Report
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: step-security/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Run tests with report
+        run: |
+          mkdir -p test-results
+          zig build test 2>&1 | tee test-results/zig-test.txt
+        continue-on-error: true
+
+      - name: Publish test output
+        uses: actions/upload-artifact@v4
+        with:
+          name: zig-test-results
+          path: test-results/zig-test.txt
