@@ -114,25 +114,25 @@ test "parse ignores trailing bytes beyond total_length" {
 
 test "parse rejects a buffer shorter than the minimum 20-byte header" {
     const data = [_]u8{0} ** 19;
-    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.PacketTooShort, ipv4.parse(&data));
+    try std.testing.expectError(ipv4.ParseError.PacketTooShort, ipv4.parse(&data));
 }
 
 test "parse rejects a non-IPv4 version" {
     var data = [_]u8{0} ** 20;
     data[0] = 0x65; // version=6, ihl=5
-    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.InvalidVersion, ipv4.parse(&data));
+    try std.testing.expectError(ipv4.ParseError.InvalidVersion, ipv4.parse(&data));
 }
 
 test "parse rejects an ihl smaller than the minimum valid header size" {
     var data = [_]u8{0} ** 20;
     data[0] = 0x44; // version=4, ihl=4 -> 16-byte header, invalid (min is 5)
-    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.InvalidHeaderLength, ipv4.parse(&data));
+    try std.testing.expectError(ipv4.ParseError.InvalidHeaderLength, ipv4.parse(&data));
 }
 
 test "parse rejects a buffer shorter than what ihl claims the header needs" {
     var data = [_]u8{0} ** 20; // only 20 bytes provided
     data[0] = 0x46; // ihl=6 -> claims a 24-byte header
-    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.PacketTooShort, ipv4.parse(&data));
+    try std.testing.expectError(ipv4.ParseError.PacketTooShort, ipv4.parse(&data));
 }
 
 test "parse rejects total_length smaller than the header it claims" {
@@ -140,7 +140,7 @@ test "parse rejects total_length smaller than the header it claims" {
     data[0] = 0x45; // ihl=5 -> 20-byte header
     data[3] = 10; // total_length = 10, less than the 20-byte header itself
     try std.testing.expectError(
-        ipv4.IPv4BaseHeader.ParseError.TotalLengthMismatch,
+        ipv4.ParseError.TotalLengthMismatch,
         ipv4.parse(&data),
     );
 }
@@ -150,7 +150,7 @@ test "parse rejects total_length larger than the actual buffer" {
     data[0] = 0x45;
     data[3] = 100; // total_length claims 100 bytes total
     try std.testing.expectError(
-        ipv4.IPv4BaseHeader.ParseError.TotalLengthMismatch,
+        ipv4.ParseError.TotalLengthMismatch,
         ipv4.parse(&data),
     );
 }

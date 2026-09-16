@@ -70,7 +70,7 @@ test "TCP: every flag bit parses independently (0xFF flag byte)" {
 test "TCP: options are sliced correctly when data_offset > 5" {
     const seg = try tcp.parse(&fixtures.tcp_with_options);
 
-    try testing.expectEqual(@as(u4, 6), seg.header.data_offset);
+    try testing.expectEqual(@as(u4, 6), seg.header.flags.data_offset);
     try testing.expectEqual(@as(u4, 6), seg.header.flags.data_offset);
     try testing.expectEqualSlices(u8, &[_]u8{ 0x02, 0x04, 0x05, 0xB4 }, seg.options);
     try testing.expectEqual(@as(usize, 0), seg.payload.len);

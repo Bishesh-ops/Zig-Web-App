@@ -27,13 +27,6 @@ pub const IPv4BaseHeader = packed struct(u96) {
     protocol: u8,
 
     checksum: u16,
-
-    pub const ParseError = error{
-        PacketTooShort,
-        InvalidVersion,
-        InvalidHeaderLength,
-        TotalLengthMismatch,
-    };
 };
 
 pub const IPv4Packet = struct {
@@ -44,13 +37,19 @@ pub const IPv4Packet = struct {
     options: []const u8,
     payload: []const u8,
 };
+pub const ParseError = error{
+    PacketTooShort,
+    InvalidVersion,
+    InvalidHeaderLength,
+    TotalLengthMismatch,
+};
 /// Safely handles byte-swapping and extracts any variable options/payload data.
-pub fn parse(data: []const u8) IPv4BaseHeader.ParseError!IPv4Packet {
-    if (data.len < 20) return IPv4BaseHeader.ParseError.PacketTooShort;
+pub fn parse(data: []const u8) ParseError!IPv4Packet {
+    if (data.len < 20) return ParseError.PacketTooShort;
 
     var base: IPv4BaseHeader = @bitCast(data[0..12].*);
 
-    if (base.version != 4) return IPv4BaseHeader.ParseError.InvalidVersion;
+    if (base.version != 4) return ParseError.InvalidVersion;
 
     base.total_length = std.mem.bigToNative(u16, base.total_length);
     base.identification = std.mem.bigToNative(u16, base.identification);
@@ -61,10 +60,10 @@ pub fn parse(data: []const u8) IPv4BaseHeader.ParseError!IPv4Packet {
     base.fragment_offset = @truncate(raw_flags_offset & 0x1FFF);
 
     const header_bytes = @as(u8, base.ihl) * 4;
-    if (header_bytes < 20) return IPv4BaseHeader.ParseError.InvalidHeaderLength;
-    if (data.len < header_bytes) return IPv4BaseHeader.ParseError.PacketTooShort;
-    if (base.total_length < header_bytes) return IPv4BaseHeader.ParseError.TotalLengthMismatch;
-    if (data.len < base.total_length) return IPv4BaseHeader.ParseError.TotalLengthMismatch;
+    if (header_bytes < 20) return ParseError.InvalidHeaderLength;
+    if (data.len < header_bytes) return ParseError.PacketTooShort;
+    if (base.total_length < header_bytes) return ParseError.TotalLengthMismatch;
+    if (data.len < base.total_length) return ParseError.TotalLengthMismatch;
 
     return IPv4Packet{
         .header = base,
