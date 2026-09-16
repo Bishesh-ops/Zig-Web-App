@@ -16,7 +16,7 @@ test "parse extracts every field correctly from a well-formed packet" {
         'H', 'E', 'L', 'L', 'O', '!', // payload
     };
 
-    const packet = try ipv4.IPv4BaseHeader.parse(&data);
+    const packet = try ipv4.parse(&data);
 
     try std.testing.expectEqual(@as(u4, 4), packet.header.version);
     try std.testing.expectEqual(@as(u4, 5), packet.header.ihl);
@@ -47,7 +47,7 @@ test "parse correctly separates dscp and ecn instead of swapping them" {
     data[1] = 0xAD;
     data[3] = 20; // total_length = 20 (header only, no payload)
 
-    const packet = try ipv4.IPv4BaseHeader.parse(&data);
+    const packet = try ipv4.parse(&data);
 
     try std.testing.expectEqual(@as(u6, 43), packet.header.dscp);
     try std.testing.expectEqual(@as(u2, 1), packet.header.ecn);
@@ -63,7 +63,7 @@ test "parse reads multi-byte fields as big-endian, not native" {
     data[10] = 0xAB;
     data[11] = 0xCD; // checksum = 0xABCD, not 0xCDAB
 
-    const packet = try ipv4.IPv4BaseHeader.parse(&data);
+    const packet = try ipv4.parse(&data);
 
     try std.testing.expectEqual(@as(u16, 0x1234), packet.header.identification);
     try std.testing.expectEqual(@as(u16, 0xABCD), packet.header.checksum);
@@ -86,7 +86,7 @@ test "parse extracts options when ihl indicates a header longer than 20 bytes" {
         'O', 'K', // payload
     };
 
-    const packet = try ipv4.IPv4BaseHeader.parse(&data);
+    const packet = try ipv4.parse(&data);
 
     try std.testing.expectEqual(@as(u8, 24), packet.header_length);
     try std.testing.expectEqualSlices(u8, &.{ 0x01, 0x02, 0x03, 0x04 }, packet.options);
@@ -106,32 +106,32 @@ test "parse ignores trailing bytes beyond total_length" {
     data[24] = 0xFF;
     data[25] = 0xFF;
 
-    const packet = try ipv4.IPv4BaseHeader.parse(&data);
+    const packet = try ipv4.parse(&data);
 
     try std.testing.expectEqualStrings("OK", packet.payload);
 }
 
 test "parse rejects a buffer shorter than the minimum 20-byte header" {
     const data = [_]u8{0} ** 19;
-    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.PacketTooShort, ipv4.IPv4BaseHeader.parse(&data));
+    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.PacketTooShort, ipv4.parse(&data));
 }
 
 test "parse rejects a non-IPv4 version" {
     var data = [_]u8{0} ** 20;
     data[0] = 0x65; // version=6, ihl=5
-    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.InvalidVersion, ipv4.IPv4BaseHeader.parse(&data));
+    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.InvalidVersion, ipv4.parse(&data));
 }
 
 test "parse rejects an ihl smaller than the minimum valid header size" {
     var data = [_]u8{0} ** 20;
     data[0] = 0x44; // version=4, ihl=4 -> 16-byte header, invalid (min is 5)
-    try std.testing.expectError(ipv4.IPv4PackedHeader.ParseError.InvalidHeaderLength, ipv4.IPv4PackedHeader.parse(&data));
+    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.InvalidHeaderLength, ipv4.parse(&data));
 }
 
 test "parse rejects a buffer shorter than what ihl claims the header needs" {
     var data = [_]u8{0} ** 20; // only 20 bytes provided
     data[0] = 0x46; // ihl=6 -> claims a 24-byte header
-    try std.testing.expectError(ipv4.IPv4PackedHeader.ParseError.PacketTooShort, ipv4.IPv4PackedHeader.parse(&data));
+    try std.testing.expectError(ipv4.IPv4BaseHeader.ParseError.PacketTooShort, ipv4.parse(&data));
 }
 
 test "parse rejects total_length smaller than the header it claims" {
@@ -140,7 +140,7 @@ test "parse rejects total_length smaller than the header it claims" {
     data[3] = 10; // total_length = 10, less than the 20-byte header itself
     try std.testing.expectError(
         ipv4.IPv4BaseHeader.ParseError.TotalLengthMismatch,
-        ipv4.IPv4BaseHeader.parse(&data),
+        ipv4.parse(&data),
     );
 }
 
@@ -150,7 +150,7 @@ test "parse rejects total_length larger than the actual buffer" {
     data[3] = 100; // total_length claims 100 bytes total
     try std.testing.expectError(
         ipv4.IPv4BaseHeader.ParseError.TotalLengthMismatch,
-        ipv4.IPv4BaseHeader.parse(&data),
+        ipv4.parse(&data),
     );
 }
 
@@ -161,7 +161,7 @@ test "parse accepts the maximum possible ihl (15 -> 60-byte header)" {
     data[60] = 'O';
     data[61] = 'K';
 
-    const packet = try ipv4.IPv4BaseHeader.parse(&data);
+    const packet = try ipv4.parse(&data);
 
     try std.testing.expectEqual(@as(u8, 60), packet.header_length);
     try std.testing.expectEqual(@as(usize, 40), packet.options.len); // 60 - 20 fixed bytes

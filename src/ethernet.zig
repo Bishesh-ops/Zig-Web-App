@@ -14,14 +14,14 @@ pub const EtherType = enum(u16) {
     _,
 };
 
-pub fn parseEthernet(data: []const u8) !EthernetFrame {
+pub fn parse(data: []const u8) !EthernetFrame {
     if (data.len < 14) return error.FrameTooShort;
     const dest_mac = data[0..6].*;
     const src_mac = data[6..12].*;
     const raw_ether_type = std.mem.readInt(u16, data[12..14], .big);
     const payload = data[14..];
 
-    const ether_type = std.enums.fromInt(EtherType, raw_ether_type) orelse error.UnknownProtocol;
+    const ether_type: EtherType = @enumFromInt(raw_ether_type);
 
     return .{
         .dest_mac = dest_mac,
