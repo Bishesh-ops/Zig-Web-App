@@ -1,5 +1,6 @@
 const std = @import("std");
-const ethernet = @import("ethernet.zig");
+const app = @import("app");
+const ethernet = app.ethernet;
 
 test "parse parses all fields of a well-formed frame" {
     const data = [_]u8{

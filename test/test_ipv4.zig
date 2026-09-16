@@ -1,5 +1,6 @@
 const std = @import("std");
-const ipv4 = @import("ipv4.zig");
+const app = @import("app");
+const ipv4 = app.ipv4;
 
 test "parse extracts every field correctly from a well-formed packet" {
     const data = [_]u8{

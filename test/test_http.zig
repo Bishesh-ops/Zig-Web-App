@@ -1,5 +1,6 @@
 const std = @import("std");
-const http = @import("http.zig");
+const app = @import("app");
+const http = app.http;
 
 // Test Parsing Functions
 test "parse GET RequestLine" {

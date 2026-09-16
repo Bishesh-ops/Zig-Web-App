@@ -1,4 +1,3 @@
-const std = @import("std");
 const ipv4 = @import("ipv4.zig");
 const ethernet = @import("ethernet.zig");
 

@@ -1,6 +1,7 @@
 const std = @import("std");
-const ethernet = @import("ethernet.zig");
-const ipv4 = @import("ipv4.zig");
+const app = @import("app");
+const ethernet = app.ethernet;
+const ipv4 = app.ipv4;
 
 test "a full Ethernet frame carrying an IPv4 packet parses end to end" {
     const data = [_]u8{

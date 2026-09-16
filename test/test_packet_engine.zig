@@ -1,6 +1,7 @@
 const std = @import("std");
-const pkt = @import("packet.zig");
-const fps = @import("packet_source.zig");
+const app = @import("app");
+const pkt = app.packet;
+const fps = app.packet_source;
 
 test "Packet owns its data independent of the source buffer" {
     var source = [_]u8{ 0xAA, 0xBB, 0xCC, 0xDD };
