@@ -1,6 +1,6 @@
-const std = @import("std");
 const ipv4 = @import("ipv4.zig");
 const ethernet = @import("ethernet.zig");
+const tcp = @import("tcp.zig");
 
 pub const ParsedPacket = struct {
     ethernet: ethernet.EthernetFrame,
@@ -8,25 +8,36 @@ pub const ParsedPacket = struct {
 };
 
 pub const NetworkProtocol = union(enum) {
-    ipv4: ipv4.IPv4Packet,
+    ipv4: IPv4Layer,
     unknown: u16,
+};
+
+pub const IPv4Layer = struct {
+    packet: ipv4.IPv4Packet,
+    transport: TransportProtocol,
+};
+
+pub const TransportProtocol = union(enum) {
+    tcp: tcp.TcpSegment,
+    unknown: u8,
 };
 
 pub fn parse(data: []const u8) !ParsedPacket {
     const eth = try ethernet.parse(data);
 
     const network = switch (eth.ether_type) {
-        .ipv4 => NetworkProtocol{
-            .ipv4 = try ipv4.parse(eth.payload),
+        .ipv4 => blk: {
+            const ip = try ipv4.parse(eth.payload);
+            const transport = switch (ip.header.protocol) {
+                6 => TransportProtocol{ .tcp = try tcp.parse(ip.payload) },
+                else => TransportProtocol{ .unknown = ip.header.protocol },
+            };
+            break :blk NetworkProtocol{
+                .ipv4 = .{ .packet = ip, .transport = transport },
+            };
         },
-
-        else => NetworkProtocol{
-            .unknown = @intFromEnum(eth.ether_type),
-        },
+        else => NetworkProtocol{ .unknown = @intFromEnum(eth.ether_type) },
     };
 
-    return ParsedPacket{
-        .ethernet = eth,
-        .network = network,
-    };
+    return ParsedPacket{ .ethernet = eth, .network = network };
 }
