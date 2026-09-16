@@ -9,32 +9,23 @@ const std = @import("std");
 /// why sub-byte fields (version/ihl, dscp/ecn, flags/fragment_offset)
 /// are declared in the reverse order you'd read them on the wire.
 pub const IPv4BaseHeader = packed struct(u96) {
-    // Byte 0
     ihl: u4,
     version: u4,
 
-    // Byte 1 — ECN is the low 2 bits on the wire, DSCP the high 6
     ecn: u2,
     dscp: u6,
 
-    // Bytes 2-3 (big-endian on the wire)
     total_length: u16,
 
-    // Bytes 4-5 (big-endian on the wire)
     identification: u16,
 
-    // Bytes 6-7 (big-endian on the wire) — fragment_offset is the low
-    // 13 bits, flags the high 3
     fragment_offset: u13,
     flags: u3,
 
-    // Byte 8
     ttl: u8,
 
-    // Byte 9
     protocol: u8,
 
-    // Bytes 10-11 (big-endian on the wire)
     checksum: u16,
 
     pub const ParseError = error{
