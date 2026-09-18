@@ -11,8 +11,7 @@ const fixtures = @import("fixtures.zig");
 //
 // The exact constructor for a "fixed" (slice-backed) reader has moved around
 // between 0.15 and 0.16. Right now it's `std.Io.Reader.fixed(data)`. If a
-// future nightly renames it (e.g. `.initFixed`, `initSlice`, etc.), you only
-// have to update this one function — not every test that needs a reader.
+// future nightly renames it, you only have to update this one function.
 // ---------------------------------------------------------------------------
 fn sliceReader(data: []const u8) std.Io.Reader {
     return std.Io.Reader.fixed(data);
@@ -27,21 +26,20 @@ const TEST_SRC_MAC = [6]u8{ 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x01 };
 const TEST_DST_MAC = [6]u8{ 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x02 };
 
 // ---------------------------------------------------------------------------
-// Frame builders
+// Frame builder
 // ---------------------------------------------------------------------------
 
-/// Assembles a full Ethernet + IPv4 + TCP frame into `buf` and returns the
-/// used prefix as an explicit `[]u8` slice.
-fn buildTcpFrame(buf: []u8, tcp_bytes: []const u8) []u8 {
+/// Assembles a full Ethernet + IPv4 + <transport> frame into `buf` and
+/// returns the used prefix as an explicit `[]u8` slice.
+///
+/// `ip_protocol` is the IANA protocol number that goes in the IPv4 header:
+///   6  = TCP
+///   17 = UDP
+fn buildFrame(buf: []u8, ip_protocol: u8, transport_bytes: []const u8) []u8 {
     var offset: usize = 0;
 
     const eth_region: []u8 = buf[offset..];
-    _ = fixtures.buildEthernetHeader(
-        eth_region,
-        TEST_DST_MAC,
-        TEST_SRC_MAC,
-        0x0800, // EtherType: IPv4
-    );
+    _ = fixtures.buildEthernetHeader(eth_region, TEST_DST_MAC, TEST_SRC_MAC, 0x0800);
     offset += 14;
 
     const ip_region: []u8 = buf[offset..];
@@ -49,25 +47,25 @@ fn buildTcpFrame(buf: []u8, tcp_bytes: []const u8) []u8 {
         ip_region,
         TEST_SRC_IP,
         TEST_DST_IP,
-        6, // IP protocol number: TCP
-        @intCast(tcp_bytes.len),
+        ip_protocol,
+        @intCast(transport_bytes.len),
     );
     offset += 20;
 
     const payload_region: []u8 = buf[offset..];
-    @memcpy(payload_region[0..tcp_bytes.len], tcp_bytes);
-    offset += tcp_bytes.len;
+    @memcpy(payload_region[0..transport_bytes.len], transport_bytes);
+    offset += transport_bytes.len;
 
     return buf[0..offset];
 }
 
 // ---------------------------------------------------------------------------
-// Layer-by-layer integration tests
+// TCP integration tests
 // ---------------------------------------------------------------------------
 
 test "Stack: Ethernet -> IPv4 -> TCP with SYN segment" {
     var buf: [128]u8 = undefined;
-    const frame = buildTcpFrame(&buf, &fixtures.tcp_syn_20);
+    const frame = buildFrame(&buf, 6, &fixtures.tcp_syn_20);
 
     const parsed = try parser.parse(frame);
 
@@ -95,7 +93,7 @@ test "Stack: Ethernet -> IPv4 -> TCP with SYN segment" {
 
 test "Stack: TCP payload slices all the way back to the frame buffer" {
     var buf: [256]u8 = undefined;
-    const frame = buildTcpFrame(&buf, &fixtures.tcp_with_payload);
+    const frame = buildFrame(&buf, 6, &fixtures.tcp_with_payload);
 
     const parsed = try parser.parse(frame);
     const seg = parsed.network.ipv4.transport.tcp;
@@ -110,7 +108,7 @@ test "Stack: TCP payload slices all the way back to the frame buffer" {
 
 test "Stack: TCP options are exposed when data_offset > 5" {
     var buf: [256]u8 = undefined;
-    const frame = buildTcpFrame(&buf, &fixtures.tcp_with_options);
+    const frame = buildFrame(&buf, 6, &fixtures.tcp_with_options);
 
     const parsed = try parser.parse(frame);
     const seg = parsed.network.ipv4.transport.tcp;
@@ -125,26 +123,6 @@ test "Stack: TCP options are exposed when data_offset > 5" {
 // Dispatch / branching tests
 // ---------------------------------------------------------------------------
 
-test "Stack: IPv4 protocol field does NOT dispatch to TCP for protocol 17 (UDP)" {
-    var buf: [128]u8 = undefined;
-
-    const eth_region: []u8 = buf[0..];
-    _ = fixtures.buildEthernetHeader(eth_region, TEST_DST_MAC, TEST_SRC_MAC, 0x0800);
-
-    const ip_region: []u8 = buf[14..];
-    _ = fixtures.buildIPv4Header(ip_region, TEST_SRC_IP, TEST_DST_IP, 17, 20);
-
-    const tcp_region: []u8 = buf[34..];
-    @memcpy(tcp_region[0..20], &fixtures.tcp_syn_20);
-
-    const parsed = try parser.parse(buf[0..54]);
-
-    switch (parsed.network.ipv4.transport) {
-        .tcp => return error.TestUnexpectedTcp,
-        .unknown => |proto| try testing.expectEqual(@as(u8, 17), proto),
-    }
-}
-
 test "Stack: non-IPv4 EtherType short-circuits network parsing" {
     var buf: [128]u8 = undefined;
     const eth_region: []u8 = buf[0..];
@@ -156,6 +134,51 @@ test "Stack: non-IPv4 EtherType short-circuits network parsing" {
         .unknown => |et| try testing.expectEqual(@as(u16, 0x0806), et),
         .ipv4 => return error.TestUnexpectedIpv4,
     }
+}
+
+test "Stack: UDP dispatch fires only for IP protocol 17" {
+    var buf: [128]u8 = undefined;
+    const frame = buildFrame(&buf, 6, &fixtures.tcp_syn_20);
+
+    const parsed = try parser.parse(frame);
+
+    switch (parsed.network.ipv4.transport) {
+        .udp => return error.TestUnexpectedUdp,
+        .tcp => {}, // expected: protocol 6 dispatched to TCP
+        .unknown => return error.TestUnexpectedUnknown,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// UDP integration tests
+// ---------------------------------------------------------------------------
+
+test "Stack: Ethernet -> IPv4 -> UDP with a small datagram" {
+    var buf: [128]u8 = undefined;
+    const frame = buildFrame(&buf, 17, &fixtures.udp_with_payload);
+
+    const parsed = try parser.parse(frame);
+    const ip_layer = parsed.network.ipv4;
+
+    try testing.expectEqual(@as(u8, 17), ip_layer.packet.header.protocol);
+
+    const dg = ip_layer.transport.udp;
+    try testing.expectEqual(@as(u16, 53), dg.header.src_port);
+    try testing.expectEqual(@as(u16, 53000), dg.header.dest_port);
+    try testing.expectEqualSlices(u8, "PING", dg.payload);
+}
+
+test "Stack: UDP payload slices all the way back to the frame buffer" {
+    var buf: [256]u8 = undefined;
+    const frame = buildFrame(&buf, 17, &fixtures.udp_with_payload);
+
+    const parsed = try parser.parse(frame);
+    const dg = parsed.network.ipv4.transport.udp;
+    try testing.expectEqualSlices(u8, "PING", dg.payload);
+
+    // UDP payload starts at 14 (eth) + 20 (ip) + 8 (udp header) = 42.
+    frame[42] = 'X';
+    try testing.expectEqual(@as(u8, 'X'), dg.payload[0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +208,7 @@ test "Stack: full HTTP-over-TCP request parses end-to-end" {
     const tcp_slice = tcp_bytes[0 .. 20 + http_payload.len];
 
     var frame_buf: [1024]u8 = undefined;
-    const frame = buildTcpFrame(&frame_buf, tcp_slice);
+    const frame = buildFrame(&frame_buf, 6, tcp_slice);
 
     // Walk the stack.
     const parsed = try parser.parse(frame);

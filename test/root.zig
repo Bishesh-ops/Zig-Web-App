@@ -6,4 +6,5 @@ test {
     _ = @import("test_ethernet.zig");
     _ = @import("test_http.zig");
     _ = @import("test_ipv4.zig");
+    _ = @import("test_udp.zig");
 }

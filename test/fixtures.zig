@@ -91,3 +91,36 @@ pub fn buildIPv4Header(
     @memcpy(buf[16..20], &dst);
     return buf[0..20];
 }
+
+/// Minimal UDP datagram: 8-byte header, no payload.
+/// src_port=53, dst_port=53000, length=8, checksum=0.
+pub const udp_empty = [_]u8{
+    0x00, 0x35, // src_port = 53
+    0xCF, 0x08, // dst_port = 53000
+    0x00, 0x08, // length = 8
+    0x00, 0x00, // checksum (0 = not computed; legal in IPv4)
+};
+
+/// UDP datagram carrying a 4-byte ASCII payload ("PING").
+/// length = 12 (8 header + 4 payload).
+pub const udp_with_payload = [_]u8{
+    0x00, 0x35,
+    0xCF, 0x08,
+    0x00, 0x0C, // length = 12
+    0x00, 0x00,
+    'P',  'I',
+    'N',  'G',
+};
+
+/// Same as `udp_with_payload`, but with 4 bytes of Ethernet-style
+/// padding appended. `length` still says 12, buffer is 16.
+pub const udp_padded = [_]u8{
+    0x00, 0x35,
+    0xCF, 0x08,
+    0x00, 0x0C,
+    0x00, 0x00,
+    'P',  'I',
+    'N',  'G',
+    0xAA, 0xAA,
+    0xAA, 0xAA,
+};

@@ -1,6 +1,7 @@
 const ipv4 = @import("ipv4.zig");
 const ethernet = @import("ethernet.zig");
 const tcp = @import("tcp.zig");
+const udp = @import("udp.zig");
 
 pub const ParsedPacket = struct {
     ethernet: ethernet.EthernetFrame,
@@ -19,6 +20,7 @@ pub const IPv4Layer = struct {
 
 pub const TransportProtocol = union(enum) {
     tcp: tcp.TcpSegment,
+    udp: udp.UdpDatagram,
     unknown: u8,
 };
 
@@ -30,6 +32,7 @@ pub fn parse(data: []const u8) !ParsedPacket {
             const ip = try ipv4.parse(eth.payload);
             const transport = switch (ip.header.protocol) {
                 6 => TransportProtocol{ .tcp = try tcp.parse(ip.payload) },
+                17 => TransportProtocol{ .udp = try udp.parse(ip.payload) },
                 else => TransportProtocol{ .unknown = ip.header.protocol },
             };
             break :blk NetworkProtocol{
